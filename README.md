@@ -1,1 +1,1 @@
-# spotify-cli
+# spotifython-cli
