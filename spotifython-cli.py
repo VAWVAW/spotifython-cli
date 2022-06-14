@@ -162,10 +162,8 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
         with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
             json.dump(data, cache_file)
 
-
-if __name__ == "__main__":
-    cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
-
+            
+def generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="command line interface to spotifython intended for use with spotifyd", epilog="use 'spotifython-cli {-h --help}' with an command for more options")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="count", default=0, help="use multiple time to increase verbosity level")
@@ -212,8 +210,13 @@ if __name__ == "__main__":
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
         spotifyd_parser.add_argument("-c", "--disable-cache", help="don't cache the player status", action="store_true")
         spotifyd_parser.set_defaults(command=spotifyd, pre_command=spotifyd_pre)
+    
+    return parser
 
-    args = parser.parse_args()
+if __name__ == "__main__":
+    cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
+
+    args = generate_parser().parse_args()
 
     if args.quiet:
         logging.basicConfig(level=logging.ERROR)
