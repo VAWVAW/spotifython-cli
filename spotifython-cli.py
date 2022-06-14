@@ -10,10 +10,7 @@ import time
 
 
 # noinspection PyShadowingNames
-def load_authentication(cache_dir: str) -> spotifython.Authentication:
-    config = configparser.ConfigParser()
-    config.read(os.path.expanduser("~/.config/spotifython-cli/config"))
-
+def load_authentication(cache_dir: str, config: configparser.ConfigParser = None) -> spotifython.Authentication:
     # try to load authentication data from cache; default to config
     if os.path.exists(os.path.join(cache_dir, "authentication")):
         with open(os.path.join(cache_dir, "authentication"), 'r') as auth_file:
@@ -63,8 +60,12 @@ def pause(client: spotifython.Client, args: argparse.Namespace, **_):
 
 
 # noinspection PyShadowingNames
-def metadata(client: spotifython.Client, args: argparse.Namespace, **_):
-    data = client.get_playing()
+def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespace, **_):
+    if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
+        with open(os.path.join(cache_dir, "status")) as cache_file:
+            data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+    else:
+        data = client.get_playing()
     print_data = {}
 
     data["title"] = data["item"].name
@@ -85,7 +86,7 @@ def metadata(client: spotifython.Client, args: argparse.Namespace, **_):
         for key, item in print_data.items():
             if not isinstance(item, spotifython.Cacheable):
                 continue
-            print_data[key] = item.to_dict(short=True)
+            print_data[key] = item.to_dict(minimal=True)
         print(json.dumps(print_data))
         return
     for key, item in print_data.copy().items():
@@ -114,28 +115,37 @@ def queue_prev(client: spotifython.Client, args: argparse.Namespace, **_):
 
 
 # noinspection PyShadowingNames
-def spotifyd_pre(args: argparse.Namespace, **_):
-    player_event = os.getenv("PLAYER_EVENT")
-    if player_event != "play":
-        quit()
-
-
-# noinspection PyShadowingNames
-def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: str, **_):
+def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: str, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
     def send_notify(title: str, desc: str, image: str = None):
         import subprocess
-        image = "--icon="+image if image is not None else ""
-        subprocess.run(["notify-send", image, f'{title}', f'{desc}'])
+        if image is None:
+            subprocess.run(["notify-send", f'{title}', f'{desc}'])
+        else:
+            image = "--icon="+image
+            subprocess.run(["notify-send", image, f'{title}', f'{desc}'])
 
-    track_id = os.getenv("TRACK_ID")
-    if not args.disable_notify:
-        try:
-            element = client.get_track("spotify:track:"+track_id)
-            desc = element.artists[0].name + " - " + element.album.name
-        except spotifython.NotFoundException:
-            element = client.get_episode("spotify:episode:"+track_id)
-            desc = element.show.name
+    data = client.get_playing()
+    element = data["item"]
+    desc = element.artists[0].name + " - " + element.album.name
+
+    do_notify = True
+    if os.path.exists(os.path.join(cache_dir, "status")):
+        with open(os.path.join(cache_dir, "status"), 'r') as cache_file:
+            cached_data = json.load(cache_file)
+            if cached_data["item"]["uri"] == str(element.uri):
+                do_notify = False
+
+    with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
+        json.dump({k: v.to_dict(minimal=True) if isinstance(v, spotifython.Cacheable) else v for k, v in data.items()}, cache_file)
+
+    if not data["is_playing"]:
+        quit()
+
+    if "spotifyd" in config.keys() and "notify" in config["spotifyd"].keys() and not config["spotifyd"]["notify"]:
+        do_notify = False
+
+    if not args.disable_notify and do_notify:
         images = element.images
 
         image_path = os.path.join(cache_dir, str(element.uri) + "-image")
@@ -156,12 +166,6 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
 
         send_notify(title=element.name, desc=desc, image=image_path)
 
-    data = {"status": os.getenv("PLAYER_EVENT"), "track_id": track_id}
-
-    if not args.disable_cache:
-        with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
-            json.dump(data, cache_file)
-
             
 def generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="command line interface to spotifython intended for use with spotifyd", epilog="use 'spotifython-cli {-h --help}' with an command for more options")
@@ -172,7 +176,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     play_parser = subparsers.add_parser("play", help=(desc_str := "start playback"), description=desc_str)
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    play_parser.add_argument("--shuffle", action="store_true")
+    play_parser.add_argument("-s", "--shuffle", action="store_true")
     play_parser.add_argument("elements", help="the songs or playlist to start playing", nargs="*")
     play_parser.set_defaults(command=play)
 
@@ -205,16 +209,21 @@ def generate_parser() -> argparse.ArgumentParser:
     prev_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     prev_parser.set_defaults(command=queue_prev)
 
+    # TODO load from config
     if sys.platform.startswith("linux"):
+        metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
+
         spotifyd_parser = subparsers.add_parser("spotifyd", help=(desc_str := "set this in your spotifyd.conf as 'on_song_change_hook'"), description=desc_str)
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
-        spotifyd_parser.add_argument("-c", "--disable-cache", help="don't cache the player status", action="store_true")
-        spotifyd_parser.set_defaults(command=spotifyd, pre_command=spotifyd_pre)
-    
+        spotifyd_parser.set_defaults(command=spotifyd)
+
     return parser
+
 
 if __name__ == "__main__":
     cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
+    config = configparser.ConfigParser()
+    config.read(os.path.expanduser("~/.config/spotifython-cli/config"))
 
     args = generate_parser().parse_args()
 
@@ -228,14 +237,11 @@ if __name__ == "__main__":
         else:
             logging.basicConfig(level=logging.WARNING)
 
-    if "pre_command" in args:
-        args.pre_command(args=args, cache_dir=cache_dir)
-
-    authentication = load_authentication(cache_dir=cache_dir)
+    authentication = load_authentication(cache_dir=cache_dir, config=config)
 
     client = spotifython.Client(cache_dir=cache_dir, authentication=authentication)
 
-    args.command(client=client, args=args, cache_dir=cache_dir)
+    args.command(client=client, args=args, cache_dir=cache_dir, config=config)
 
     # cache authentication data
     with open(os.path.join(cache_dir, "authentication"), 'w') as auth_file:
