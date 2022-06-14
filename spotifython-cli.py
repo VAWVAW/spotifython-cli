@@ -172,7 +172,54 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
 
         send_notify(title=element.name, desc=desc, image=image_path)
 
-            
+
+# noinspection PyShadowingNames
+def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, **_):
+    def dmenu_query(title: str, options: list[str]) -> list[str]:
+        import subprocess
+
+        input_str = "\n".join(options) + "\n"
+
+        proc = subprocess.Popen(["dmenu", "-i", "-l", "50", "-p", title], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
+
+    # noinspection PyShadowingNames
+    def add_names(titles: list[str], tracks: dict[str, spotifython.Playable]):
+        for title in titles:
+            if title not in tracks.keys():
+                if title != "":
+                    logging.error(f"track {title} not found in playlist {playlist.name}")
+                continue
+            client.add_to_queue(tracks[title], device_id=device_id)
+
+    device_id = args.id or client.get_playing()["device"]["id"]
+    if args.playlist_uri is not None:
+        playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
+    else:
+        playlists = {playlist.name: playlist for playlist in client.user_playlists}
+        if args.playlist_dmenu:
+            names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
+            if len(names) == 0:
+                quit(1)
+            playlist = playlists[names[0]]
+        else:
+            if args.playlist not in playlists.keys():
+                logging.error(f"playlist {args.playlist} not found")
+                quit(1)
+            playlist = playlists[args.playlist]
+
+    items = playlist.items
+    items.reverse()
+    tracks = {item["track"].name: item["track"] for item in items}
+
+    add_names(titles=args.names, tracks=tracks)
+
+    if not args.dmenu:
+        return
+    names = dmenu_query("songs to add to queue: ", options=list(tracks.keys()))
+    add_names(titles=names, tracks=tracks)
+
+
 def generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="command line interface to spotifython intended for use with spotifyd", epilog="use 'spotifython-cli {-h --help}' with an command for more options")
     group = parser.add_mutually_exclusive_group()
@@ -217,8 +264,19 @@ def generate_parser() -> argparse.ArgumentParser:
     prev_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     prev_parser.set_defaults(command=queue_prev)
 
+    add_queue_playlist_parser = subparsers.add_parser("add_queue_playlist", help=(desc_str := "add songs from a playlist to the queue"), description=desc_str)
+    add_queue_playlist_group = add_queue_playlist_parser.add_mutually_exclusive_group(required=True)
+    add_queue_playlist_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
+    add_queue_playlist_group.add_argument("--playlist", help="name of the playlist to base the search on")
+    add_queue_playlist_group.add_argument("--playlist-uri", help="uri of the playlist to base the search on")
+    add_queue_playlist_parser.add_argument("names", help="names of the songs you want to add", nargs="*")
+    add_queue_playlist_parser.set_defaults(command=add_queue_playlist)
+
     if sys.platform.startswith("linux"):
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
+
+        add_queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
+        add_queue_playlist_parser.add_argument("--dmenu", help="query the user for additional titles using dmenu", action="store_true")
 
         spotifyd_parser = subparsers.add_parser("spotifyd", help=(desc_str := "set this in your spotifyd.conf as 'on_song_change_hook'"), description=desc_str)
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
