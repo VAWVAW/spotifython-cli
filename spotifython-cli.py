@@ -264,7 +264,7 @@ def generate_parser() -> argparse.ArgumentParser:
     prev_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     prev_parser.set_defaults(command=queue_prev)
 
-    add_queue_playlist_parser = subparsers.add_parser("add_queue_playlist", help=(desc_str := "add songs from a playlist to the queue"), description=desc_str)
+    add_queue_playlist_parser = subparsers.add_parser("add-queue-playlist", help=(desc_str := "add songs from a playlist to the queue"), description=desc_str)
     add_queue_playlist_group = add_queue_playlist_parser.add_mutually_exclusive_group(required=True)
     add_queue_playlist_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     add_queue_playlist_group.add_argument("--playlist", help="name of the playlist to base the search on")

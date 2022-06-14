@@ -1,0 +1,37 @@
+import setuptools
+
+import os
+os.system("pwd")
+os.system("ls -la")
+with open("README.rst", "r", encoding="utf-8") as f:
+    readme = f.read()
+
+setuptools.setup(
+    name="spotifython-cli",
+    version="0.1.1",
+    author="VAWVAW",
+    author_email="vawvaw@vaw-valentin.de",
+    description="A command line interface for spotifython intended for use with spotifyd",
+    long_description=readme,
+    long_description_content_type="text/x-rst",
+    url="https://github.com/vawvaw/spotifython-cli",
+    project_urls={
+        "Bug Tracker": "https://github.com/vawvaw/spotifython-cli/issues",
+        # "Documentation": "https://spotifython-cli.readthedocs.io/",
+    },
+    license="GPLv3",
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: End Users/Desktop",
+        "Programming Language :: Python :: 3.10",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        'Topic :: Internet',
+        'Topic :: Utilities',
+        "Typing :: Typed",
+    ],
+    py_modules=["spotifython-cli"],
+    install_requires=["spotifython>=0.1.4"],
+    python_requires=">=3.10",
+)
