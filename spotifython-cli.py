@@ -89,6 +89,12 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
             print_data[key] = item.to_dict(minimal=True)
         print(json.dumps(print_data))
         return
+    if "format" in args:
+        try:
+            print(args.format.format(**data))
+        except KeyError as e:
+            logging.error(f"field {e} not found")
+        return
     for key, item in print_data.copy().items():
         if isinstance(item, (spotifython.Cacheable | dict | list)):
             del print_data[key]
@@ -189,11 +195,13 @@ def generate_parser() -> argparse.ArgumentParser:
         help=(desc_str := "get metadata about the playback state"),
         description=desc_str + "; print all if no fields are given; some arguments are only valid as json output"
     )
-    metadata_parser.add_argument("-j", "--json", help="output in json format", action="store_true")
+    metadata_group = metadata_parser.add_mutually_exclusive_group()
     metadata_parser.add_argument(
         "fields", nargs="*",
-        help="possible values are: device device_id shuffle_state repeat_state timestamp context context_name artist artist_name track progress_ms title currently_playing_type actions is_playing images"
+        help="possible values are: device device_id shuffle_state repeat_state timestamp context context_name artist artist_name track progress_ms title currently_playing_type actions is_playing images item"
     )
+    metadata_group.add_argument("-j", "--json", help="output in json format", action="store_true")
+    metadata_group.add_argument("--format", help="string to format with the builtin python method using the fields as kwargs")
     metadata_parser.set_defaults(command=metadata)
 
     shuffle_parser = subparsers.add_parser("shuffle", help=(desc_str := "set shuffle state"), description=desc_str)
@@ -209,7 +217,6 @@ def generate_parser() -> argparse.ArgumentParser:
     prev_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     prev_parser.set_defaults(command=queue_prev)
 
-    # TODO load from config
     if sys.platform.startswith("linux"):
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
 
