@@ -204,7 +204,10 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
     if args.playlist_uri is not None:
         playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
     else:
-        playlists = {playlist.name: playlist for playlist in client.user_playlists}
+        playlists = {"saved tracks": "saved tracks"}
+        for playlist in client.user_playlists:
+            playlists[playlist.name] = playlist
+
         if args.playlist_dmenu:
             names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
             if len(names) == 0:
@@ -216,9 +219,12 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
                 quit(1)
             playlist = playlists[args.playlist]
 
-    items = playlist.items
-    items.reverse()
-    tracks = {item["track"].name: item["track"] for item in items}
+    if playlist == "saved tracks":
+        tracks = {item.name: item for item in client.saved_tracks}
+    else:
+        items = playlist.items
+        items.reverse()
+        tracks = {item["track"].name: item["track"] for item in items}
 
     add_names(titles=args.names, tracks=tracks)
 
