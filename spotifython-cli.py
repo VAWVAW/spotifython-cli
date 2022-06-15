@@ -55,7 +55,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, **_):
 
 # noinspection PyShadowingNames
 def pause(client: spotifython.Client, args: argparse.Namespace, **_):
-    device_id = args.id or client.get_playing()["device"]["id"]
+    device_id = args.id
     client.pause(device_id=device_id)
 
 
@@ -192,7 +192,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, **_
                 continue
             client.add_to_queue(tracks[title], device_id=device_id)
 
-    device_id = args.id or client.get_playing()["device"]["id"]
+    device_id = args.id
     if args.playlist_uri is not None:
         playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
     else:
