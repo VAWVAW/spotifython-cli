@@ -25,24 +25,25 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
 
 
 # noinspection PyShadowingNames
-def play(client: spotifython.Client, args: argparse.Namespace, **_):
+def play(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
-    def play_elements(client: spotifython.Client, uri_strings: list[str]):
+    def play_elements(client: spotifython.Client, uri_strings: list[str], device_id: str = None):
         uris = [spotifython.URI(uri_string=uri_string) for uri_string in uri_strings]
         if len(uris) == 1 and issubclass(uris[0].type, spotifython.PlayContext):
-            client.play(context=uris[0])
+            client.play(context=uris[0], device_id=device_id)
             return
 
         uris = [uri for uri in uris if issubclass(uri.type, spotifython.Playable)]
         if len(uris) == 0:
-            client.play()
+            client.play(device_id=device_id)
             return
-        client.play(uris)
+        client.play(uris, device_id=device_id)
 
+    device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     try:
-        play_elements(client, args.elements)
+        play_elements(client, args.elements, device_id=device_id)
     except spotifython.NotFoundException:
-        device_id = args.id or client.devices[0]["id"]
+        device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else client.devices[0]["id"]
 
         client.transfer_playback(device_id=device_id)
         client.set_playback_shuffle(state=False, device_id=device_id)
@@ -50,12 +51,12 @@ def play(client: spotifython.Client, args: argparse.Namespace, **_):
             client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
-        play_elements(client, args.elements)
+        play_elements(client, args.elements, device_id=device_id)
 
 
 # noinspection PyShadowingNames
-def pause(client: spotifython.Client, args: argparse.Namespace, **_):
-    device_id = args.id
+def pause(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
+    device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     client.pause(device_id=device_id)
 
 
@@ -89,7 +90,7 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
             print_data[key] = item.to_dict(minimal=True)
         print(json.dumps(print_data))
         return
-    if "format" in args:
+    if "format" in args and args.format is not None:
         try:
             print(args.format.format(**data))
         except KeyError as e:
@@ -174,7 +175,7 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
 
 
 # noinspection PyShadowingNames
-def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, **_):
+def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     def dmenu_query(title: str, options: list[str]) -> list[str]:
         import subprocess
 
@@ -199,7 +200,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, **_
                     quit(1)
                 raise e
 
-    device_id = args.id
+    device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     if args.playlist_uri is not None:
         playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
     else:
@@ -271,19 +272,22 @@ def generate_parser() -> argparse.ArgumentParser:
     prev_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     prev_parser.set_defaults(command=queue_prev)
 
-    add_queue_playlist_parser = subparsers.add_parser("add-queue-playlist", help=(desc_str := "add songs from a playlist to the queue"), description=desc_str)
-    add_queue_playlist_group = add_queue_playlist_parser.add_mutually_exclusive_group(required=True)
-    add_queue_playlist_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    add_queue_playlist_group.add_argument("--playlist", help="name of the playlist to base the search on")
-    add_queue_playlist_group.add_argument("--playlist-uri", help="uri of the playlist to base the search on")
-    add_queue_playlist_parser.add_argument("names", help="names of the songs you want to add", nargs="*")
-    add_queue_playlist_parser.set_defaults(command=add_queue_playlist)
+    queue_parser = subparsers.add_parser("queue", help=(desc_str := "add to the queue"), description=desc_str)
+    queue_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
+    queue_sub = queue_parser.add_subparsers(title="sub command", required=True)
+
+    queue_playlist_parser = queue_sub.add_parser("playlist", help=(desc_str := "add songs from a playlist to the queue"), description=desc_str)
+    queue_playlist_group = queue_playlist_parser.add_mutually_exclusive_group(required=True)
+    queue_playlist_group.add_argument("--playlist", help="name of the playlist to base the search on")
+    queue_playlist_group.add_argument("--playlist-uri", help="uri of the playlist to base the search on")
+    queue_playlist_parser.add_argument("names", help="names of the songs you want to add", nargs="*")
+    queue_playlist_parser.set_defaults(command=add_queue_playlist)
 
     if sys.platform.startswith("linux"):
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
 
-        add_queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
-        add_queue_playlist_parser.add_argument("--dmenu", help="query the user for additional titles using dmenu", action="store_true")
+        queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
+        queue_playlist_parser.add_argument("--dmenu", help="query the user for additional titles using dmenu", action="store_true")
 
         spotifyd_parser = subparsers.add_parser("spotifyd", help=(desc_str := "set this in your spotifyd.conf as 'on_song_change_hook'"), description=desc_str)
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
