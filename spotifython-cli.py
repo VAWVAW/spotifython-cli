@@ -190,7 +190,14 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, **_
                 if title != "":
                     logging.error(f"track {title} not found in playlist {playlist.name}")
                 continue
-            client.add_to_queue(tracks[title], device_id=device_id)
+            try:
+                client.add_to_queue(tracks[title], device_id=device_id)
+            except spotifython.NotFoundException as e:
+                error = json.loads(e.args[0])["error"]
+                if error["reason"] == "NO_ACTIVE_DEVICE":
+                    logging.error("add to queue: no active device found")
+                    quit(1)
+                raise e
 
     device_id = args.id
     if args.playlist_uri is not None:
