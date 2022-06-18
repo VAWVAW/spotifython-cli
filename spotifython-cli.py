@@ -61,6 +61,9 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     try:
         play_elements(client, elements, device_id=device_id)
+        if args.shuffle:
+            client.set_playback_shuffle(True, device_id=device_id)
+
     except spotifython.NotFoundException:
         device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else client.devices[0]["id"]
 
