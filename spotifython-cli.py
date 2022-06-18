@@ -281,7 +281,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     shuffle_parser = subparsers.add_parser("shuffle", help=(desc_str := "set shuffle state"), description=desc_str)
     shuffle_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    shuffle_parser.add_argument("state", type=bool, default=True, help="True/False")
+    shuffle_parser.add_argument("state", type=bool, default=True, help="True/False", nargs="?")
     shuffle_parser.set_defaults(command=shuffle)
 
     next_parser = subparsers.add_parser("next", help=(desc_str := "skip to next song"), description=desc_str)
