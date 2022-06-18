@@ -9,6 +9,15 @@ import argparse
 import time
 
 
+def dmenu_query(title: str, options: list[str]) -> list[str]:
+    import subprocess
+
+    input_str = "\n".join(options) + "\n"
+
+    proc = subprocess.Popen(["dmenu", "-i", "-l", "50", "-p", title], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
+
+
 # noinspection PyShadowingNames
 def load_authentication(cache_dir: str, config: configparser.ConfigParser = None) -> spotifython.Authentication:
     # try to load authentication data from cache; default to config
@@ -40,8 +49,18 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
         client.play(uris, device_id=device_id)
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
+    elements = args.elements
+    if args.playlist_dmenu:
+        playlists = {"saved tracks": str(client.me.uri) + ":collection"}
+        for playlist in client.user_playlists:
+            playlists[playlist.name] = str(playlist.uri)
+
+        playlist = dmenu_query("playlist to play", options=list(playlists.keys()))
+        if len(playlist) > 0 and playlist[0] in playlists:
+            elements = [playlists[playlist[0]]]
+
     try:
-        play_elements(client, args.elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id)
     except spotifython.NotFoundException:
         device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else client.devices[0]["id"]
 
@@ -51,7 +70,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
             client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
-        play_elements(client, args.elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id)
 
 
 # noinspection PyShadowingNames
@@ -176,14 +195,6 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
 
 # noinspection PyShadowingNames
 def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
-    def dmenu_query(title: str, options: list[str]) -> list[str]:
-        import subprocess
-
-        input_str = "\n".join(options) + "\n"
-
-        proc = subprocess.Popen(["dmenu", "-i", "-l", "50", "-p", title], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-        return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
-
     # noinspection PyShadowingNames
     def add_names(titles: list[str], tracks: dict[str, spotifython.Playable]):
         for title in titles:
@@ -210,7 +221,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
 
         if args.playlist_dmenu:
             names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
-            if len(names) == 0:
+            if len(names) == 0 or names[0] not in playlists.keys():
                 quit(1)
             playlist = playlists[names[0]]
         else:
@@ -290,6 +301,8 @@ def generate_parser() -> argparse.ArgumentParser:
     queue_playlist_parser.set_defaults(command=add_queue_playlist)
 
     if sys.platform.startswith("linux"):
+        play_parser.add_argument("--playlist-dmenu", help="query the user for a playlist name using dmenu and play it", action="store_true")
+
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
 
         queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
@@ -304,6 +317,8 @@ def generate_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
+    if not os.path.exists(cache_dir):
+        os.mkdir(cache_dir, mode=0o755)
     config = configparser.ConfigParser()
     config.read(os.path.expanduser("~/.config/spotifython-cli/config"))
 
