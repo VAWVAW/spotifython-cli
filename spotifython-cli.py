@@ -218,7 +218,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
     if args.playlist_uri is not None:
         playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
     else:
-        playlists = {"saved tracks": "saved tracks"}
+        playlists = {"saved tracks": client.saved_tracks}
         for playlist in client.user_playlists:
             playlists[playlist.name] = playlist
 
@@ -233,12 +233,10 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
                 quit(1)
             playlist = playlists[args.playlist]
 
-    if playlist == "saved tracks":
-        tracks = {item.name: item for item in client.saved_tracks}
-    else:
-        items = playlist.items
+    items = playlist.items
+    if not issubclass(playlist.uri.type, spotifython.SavedTracks):
         items.reverse()
-        tracks = {item["track"].name: item["track"] for item in items}
+    tracks = {item.name: item for item in items}
 
     add_names(titles=args.names, tracks=tracks)
 
