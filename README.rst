@@ -45,6 +45,6 @@ Config
     notify = true   # optional
 
     [playback]
-    device_id = "your playback device"  #optional
+    device_id = "your playback device"  # optional
 
 For help on how to obtain client id and secret refer to the `spotifython documentation <https://github.com/vawvaw/spotifython>`_.
