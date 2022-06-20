@@ -50,14 +50,18 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     elements = args.elements
-    if args.playlist_dmenu:
+    if args.playlist_dmenu or args.playlist is not None:
         playlists = {"saved tracks": str(client.me.uri) + ":collection"}
         for playlist in client.user_playlists:
             playlists[playlist.name] = str(playlist.uri)
 
-        playlist = dmenu_query("playlist to play", options=list(playlists.keys()))
-        if len(playlist) > 0 and playlist[0] in playlists:
-            elements = [playlists[playlist[0]]]
+        if args.playlist_dmenu:
+            playlist = dmenu_query("playlist to play", options=list(playlists.keys()))
+            if len(playlist) > 0 and playlist[0] in playlists:
+                elements = [playlists[playlist[0]]]
+
+        if args.playlist is not None:
+            elements = [playlists[args.playlist]]
 
     try:
         play_elements(client, elements, device_id=device_id)
@@ -256,7 +260,8 @@ def generate_parser() -> argparse.ArgumentParser:
     play_parser = subparsers.add_parser("play", help=(desc_str := "start playback"), description=desc_str)
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     play_parser.add_argument("-s", "--shuffle", action="store_true")
-    play_parser.add_argument("elements", help="the songs or playlist to start playing", nargs="*")
+    play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
+    play_parser.add_argument("elements", help="uris of the songs or playlist to start playing", nargs="*")
     play_parser.set_defaults(command=play)
 
     pause_parser = subparsers.add_parser("pause", help=(desc_str := "pause playback"), description=desc_str)
