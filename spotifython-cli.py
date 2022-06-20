@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 import time
+from distutils.util import strtobool
 
 
 def dmenu_query(title: str, options: list[str]) -> list[str]:
@@ -49,6 +50,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
         client.play(uris, device_id=device_id)
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
+    shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
     elements = args.elements
     if args.playlist_dmenu or args.playlist is not None:
         playlists = {"saved tracks": str(client.me.uri) + ":collection"}
@@ -65,16 +67,17 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     try:
         play_elements(client, elements, device_id=device_id)
-        if args.shuffle:
-            client.set_playback_shuffle(True, device_id=device_id)
+        if shuffle is not None:
+            client.set_playback_shuffle(shuffle, device_id=device_id)
 
     except spotifython.NotFoundException:
         device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else client.devices[0]["id"]
 
         client.transfer_playback(device_id=device_id)
-        client.set_playback_shuffle(state=False, device_id=device_id)
-        if args.shuffle:
-            client.set_playback_shuffle(state=True, device_id=device_id)
+        if shuffle is not None:
+            client.set_playback_shuffle(state=False, device_id=device_id)
+            if shuffle:
+                client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
         play_elements(client, elements, device_id=device_id)
@@ -134,7 +137,8 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
 
 # noinspection PyShadowingNames
 def shuffle(client: spotifython.Client, args: argparse.Namespace, **_):
-    client.set_playback_shuffle(state=args.state, device_id=args.id)
+    shuffle = bool(strtobool(args.state))
+    client.set_playback_shuffle(state=shuffle, device_id=args.id)
 
 
 # noinspection PyShadowingNames
@@ -259,7 +263,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     play_parser = subparsers.add_parser("play", help=(desc_str := "start playback"), description=desc_str)
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    play_parser.add_argument("-s", "--shuffle", action="store_true")
+    play_parser.add_argument("-s", "--shuffle", help="True/False")
     play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
     play_parser.add_argument("elements", help="uris of the songs or playlist to start playing", nargs="*")
     play_parser.set_defaults(command=play)
@@ -284,7 +288,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     shuffle_parser = subparsers.add_parser("shuffle", help=(desc_str := "set shuffle state"), description=desc_str)
     shuffle_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    shuffle_parser.add_argument("state", type=bool, default=True, help="True/False", nargs="?")
+    shuffle_parser.add_argument("state", default="True", help="True/False", nargs="?")
     shuffle_parser.set_defaults(command=shuffle)
 
     next_parser = subparsers.add_parser("next", help=(desc_str := "skip to next song"), description=desc_str)
