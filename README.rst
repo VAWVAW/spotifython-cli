@@ -1,12 +1,12 @@
 spotifython-cli
-==============
+===============
 
 A command line interface to the Spotify API using `spotifython <https://github.com/vawvaw/spotifython>`_ as a backend.
 This tool is developed for the use in scripting on linux and is integrated with the spotifyd player.
 All API access except playback modification is readonly.
 
 Installation
-----------
+------------
 **python 3.10 or higher is required**
 
 .. code:: sh
