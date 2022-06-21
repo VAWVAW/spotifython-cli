@@ -327,7 +327,7 @@ def generate_parser() -> argparse.ArgumentParser:
     return parser
 
 
-if __name__ == "__main__":
+def main():
     cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
     if not os.path.exists(cache_dir):
         os.mkdir(cache_dir, mode=0o755)
@@ -355,3 +355,7 @@ if __name__ == "__main__":
     # cache authentication data
     with open(os.path.join(cache_dir, "authentication"), 'w') as auth_file:
         json.dump(authentication.to_dict(), auth_file)
+
+
+if __name__ == "__main__":
+    main()
