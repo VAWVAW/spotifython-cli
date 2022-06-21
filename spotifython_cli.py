@@ -255,7 +255,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
 
 
 def generate_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="command line interface to spotifython intended for use with spotifyd", epilog="use 'spotifython-cli {-h --help}' with an command for more options")
+    parser = argparse.ArgumentParser(description="command line interface to spotifython intended for use with spotifyd", epilog="use 'spotifython-cli {-h --help}' with an command for more options", prog="spotifython-cli")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="count", default=0, help="use multiple time to increase verbosity level")
     group.add_argument("-q", "--quiet", action="store_true")
