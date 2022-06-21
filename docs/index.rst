@@ -2,9 +2,9 @@ Welcome to spotifython-cli's documentation!
 ===========================================
 
 .. argparse::
-   :filename: ../spotifython-cli.py
+   :filename: ../spotifython_cli.py
    :func: generate_parser
-   :prog: spotifython-cli
+   :prog: spotifython_cli
 
 
 .. toctree::
