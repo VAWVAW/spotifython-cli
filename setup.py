@@ -29,6 +29,6 @@ setuptools.setup(
         "Typing :: Typed",
     ],
     py_modules=["spotifython_cli"],
-    install_requires=["spotifython>=0.1.4"],
+    install_requires=["spotifython>=0.1.5"],
     python_requires=">=3.10",
 )
