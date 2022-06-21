@@ -98,11 +98,11 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
         data = client.get_playing()
     print_data = {}
 
-    data["title"] = data["item"].name
-    data["images"] = data["item"].images
-    data["context_name"] = data["context"].name
-    data["artist"] = data["item"].artists[0]
-    data["artist_name"] = data["artist"].name
+    data["title"] = data["item"].name if data["item"] is not None else None
+    data["images"] = data["item"].images if data["item"] is not None else None
+    data["context_name"] = data["context"].name if data["context"] is not None else None
+    data["artist"] = data["item"].artists[0] if data["item"] is not None else None
+    data["artist_name"] = data["artist"].name if data["artist"] is not None else None
     data["device_id"] = data["device"]["id"]
 
     for key in data.keys():
