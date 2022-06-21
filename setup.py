@@ -1,8 +1,5 @@
 import setuptools
 
-import os
-os.system("pwd")
-os.system("ls -la")
 with open("README.rst", "r", encoding="utf-8") as f:
     readme = f.read()
 
