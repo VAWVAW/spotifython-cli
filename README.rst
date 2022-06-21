@@ -5,8 +5,29 @@ A command line interface to the Spotify API using `spotifython <https://github.c
 This tool is developed for the use in scripting on linux and is integrated with the spotifyd player.
 All API access except playback modification is readonly.
 
+Installation
+----------
+**python 3.10 or higher is required**
+
+.. code:: sh
+
+    # Linux/macOS
+    python3 -m pip install -U spotifython-cli
+.. code:: sh
+
+    # Windows
+    py -3 -m pip install -U spotifython-cli
+
+To install the development version, run:
+
+.. code:: sh
+
+    $ git clone https://github.com/vawvaw/spotifython-cli
+    $ cd spotipython-cli
+    $ python3 -m pip install -U .
+
 Dependencies
-------------
+++++++++++++
 
 - `spotifyd <https://github.com/Spotifyd/spotifyd>`_ for player integration
 - `dmenu` for interactive selection of content
