@@ -159,7 +159,7 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
         if image is None:
             subprocess.run(["notify-send", f'{title}', f'{desc}'])
         else:
-            image = "--icon="+image
+            image = "--icon=" + image
             subprocess.run(["notify-send", image, f'{title}', f'{desc}'])
 
     data = client.get_playing()
@@ -279,8 +279,10 @@ def generate_parser() -> argparse.ArgumentParser:
     )
     metadata_group = metadata_parser.add_mutually_exclusive_group()
     metadata_parser.add_argument(
-        "fields", nargs="*",
-        help="possible values are: device device_id shuffle_state repeat_state timestamp context context_name artist artist_name track progress_ms title currently_playing_type actions is_playing images item"
+        "fields", nargs="*", default="",
+        choices=["item", "title", "context", "context_name", "artist", "artist_name", "device", "device_id", "images", "shuffle_state", "repeat_state", "timestamp",
+                 "progress_ms", "currently_playing_type", "actions", "is_playing", ""],
+        help="the fields you want to print"
     )
     metadata_group.add_argument("-j", "--json", help="output in json format", action="store_true")
     metadata_group.add_argument("--format", help="string to format with the builtin python method using the fields as kwargs")
