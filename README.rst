@@ -22,9 +22,9 @@ To install the development version, run:
 
 .. code:: sh
 
-    $ git clone https://github.com/vawvaw/spotifython-cli
-    $ cd spotipython-cli
-    $ python3 -m pip install -U .
+    git clone https://github.com/vawvaw/spotifython-cli
+    cd spotipython-cli
+    python3 -m pip install -U .
 
 Dependencies
 ++++++++++++
