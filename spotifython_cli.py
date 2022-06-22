@@ -89,6 +89,22 @@ def pause(client: spotifython.Client, args: argparse.Namespace, config: configpa
     client.pause(device_id=device_id)
 
 
+def play_pause(client: spotifython.Client, args: argparse.Namespace, config:configparser, cache_dir: str, **_):
+    if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
+        try:
+            with open(os.path.join(cache_dir, "status")) as cache_file:
+                data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        except json.decoder.JSONDecodeError:
+            data = client.get_playing()
+    else:
+        data = client.get_playing()
+
+    if data is None or not data["is_playing"]:
+        play(client=client, args=args, config=config)
+    else:
+        pause(client=client, args=args, config=config)
+
+
 # noinspection PyShadowingNames
 def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespace, **_):
     if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
@@ -296,6 +312,10 @@ def generate_parser() -> argparse.ArgumentParser:
     pause_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     pause_parser.set_defaults(command=pause)
 
+    play_pause_parser = subparsers.add_parser("play-pause", help=(desc_str := "toggle between play/pause"), description=desc_str)
+    play_pause_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
+    play_pause_parser.set_defaults(command=play_pause, shuffle=None, elements=[], playlist=None, playlist_dmenu=None)
+
     metadata_parser = subparsers.add_parser(
         "metadata",
         help=(desc_str := "get metadata about the playback state"),
@@ -340,6 +360,8 @@ def generate_parser() -> argparse.ArgumentParser:
         play_parser.add_argument("--playlist-dmenu", help="query the user for a playlist name using dmenu and play it", action="store_true")
 
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
+
+        play_pause_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
 
         queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
         queue_playlist_parser.add_argument("--dmenu", help="query the user for additional titles using dmenu", action="store_true")
