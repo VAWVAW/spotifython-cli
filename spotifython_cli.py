@@ -219,7 +219,7 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
     if not data["is_playing"]:
         return
 
-    if "spotifyd" in config.keys() and "notify" in config["spotifyd"].keys() and not config["spotifyd"]["notify"]:
+    if "spotifyd" in config and "notify" in config["spotifyd"] and not config["spotifyd"]["notify"]:
         do_notify = False
 
     if not args.disable_notify and do_notify:
