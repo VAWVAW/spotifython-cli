@@ -18,7 +18,7 @@ def dmenu_query(prompt: str, options: list[str], config: configparser.ConfigPars
 
     cmdline = ["dmenu", "-i", "-l", "50", "-p", prompt]
     if "interface" in config and "dmenu_cmdline" in config["interface"]:
-        cmdline = shlex.split(config["interface"]["dmenu_cmdline"].format(prompt=prompt))
+        cmdline = shlex.split(config["interface"]["dmenu_cmdline"].format(prompt=f"'{prompt}'"))
 
     proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
