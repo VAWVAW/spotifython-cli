@@ -168,10 +168,14 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
 
     do_notify = True
     if os.path.exists(os.path.join(cache_dir, "status")):
-        with open(os.path.join(cache_dir, "status"), 'r') as cache_file:
-            cached_data = json.load(cache_file)
-            if cached_data["item"]["uri"] == str(element.uri):
-                do_notify = False
+        try:
+            with open(os.path.join(cache_dir, "status"), 'r') as cache_file:
+                cached_data = json.load(cache_file)
+                if cached_data["item"]["uri"] == str(element.uri):
+                    do_notify = False
+        except (json.decoder.JSONDecodeError | KeyError):
+            # cache is invalid so we won't use it
+            pass
 
     with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
         json.dump({k: v.to_dict(minimal=True) if isinstance(v, spotifython.Cacheable) else v for k, v in data.items()}, cache_file)
