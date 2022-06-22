@@ -193,7 +193,7 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
                 cached_data = json.load(cache_file)
                 if cached_data["item"]["uri"] == str(element.uri):
                     do_notify = False
-        except (json.decoder.JSONDecodeError | KeyError):
+        except (json.decoder.JSONDecodeError, TypeError, KeyError):
             # cache is invalid so we won't use it
             pass
 
