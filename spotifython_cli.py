@@ -92,10 +92,20 @@ def pause(client: spotifython.Client, args: argparse.Namespace, config: configpa
 # noinspection PyShadowingNames
 def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespace, **_):
     if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
-        with open(os.path.join(cache_dir, "status")) as cache_file:
-            data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        try:
+            with open(os.path.join(cache_dir, "status")) as cache_file:
+                data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        except json.decoder.JSONDecodeError:
+            data = client.get_playing()
     else:
         data = client.get_playing()
+    if data is None:
+        data = {
+            "is_playing": False,
+            "item": None,
+            "context": None,
+            "device": None,
+            }
     print_data = {}
 
     data["title"] = data["item"].name if data["item"] is not None else None
@@ -103,7 +113,7 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
     data["context_name"] = data["context"].name if data["context"] is not None else None
     data["artist"] = data["item"].artists[0] if data["item"] is not None else None
     data["artist_name"] = data["artist"].name if data["artist"] is not None else None
-    data["device_id"] = data["device"]["id"]
+    data["device_id"] = data["device"]["id"] if data["device"] is not None else None
 
     for key in data.keys():
         if key in args.fields:
@@ -163,6 +173,16 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
             subprocess.run(["notify-send", image, f'{title}', f'{desc}'])
 
     data = client.get_playing()
+    if data is None:
+        data = {
+            "is_playing": False,
+            "item": None,
+            "context": None,
+            "device": None,
+        }
+        with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
+            json.dump(data, cache_file)
+            return
     element = data["item"]
     desc = element.artists[0].name + " - " + element.album.name
 
@@ -181,7 +201,7 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
         json.dump({k: v.to_dict(minimal=True) if isinstance(v, spotifython.Cacheable) else v for k, v in data.items()}, cache_file)
 
     if not data["is_playing"]:
-        quit()
+        return
 
     if "spotifyd" in config.keys() and "notify" in config["spotifyd"].keys() and not config["spotifyd"]["notify"]:
         do_notify = False
@@ -237,12 +257,12 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
         if args.playlist_dmenu:
             names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
             if len(names) == 0 or names[0] not in playlists.keys():
-                quit(1)
+                return
             playlist = playlists[names[0]]
         else:
             if args.playlist not in playlists.keys():
                 logging.error(f"playlist {args.playlist} not found")
-                quit(1)
+                return
             playlist = playlists[args.playlist]
 
     items = playlist.items
