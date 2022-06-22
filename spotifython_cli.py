@@ -370,6 +370,16 @@ def generate_parser() -> argparse.ArgumentParser:
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
         spotifyd_parser.set_defaults(command=spotifyd)
 
+    else:
+        play_parser.set_defaults(playlist_dmenu=False)
+
+        metadata_parser.set_defaults(use_cache=False)
+
+        play_pause_parser.set_defaults(use_cache=False)
+
+        queue_playlist_group.set_defaults(playlist_dmenu=False)
+        queue_playlist_parser.set_defaults(dmenu=False)
+
     return parser
 
 
