@@ -10,12 +10,17 @@ import time
 from distutils.util import strtobool
 
 
-def dmenu_query(title: str, options: list[str]) -> list[str]:
+def dmenu_query(prompt: str, options: list[str], config: configparser.ConfigParser) -> list[str]:
     import subprocess
+    import shlex
 
     input_str = "\n".join(options) + "\n"
 
-    proc = subprocess.Popen(["dmenu", "-i", "-l", "50", "-p", title], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    cmdline = ["dmenu", "-i", "-l", "50", "-p", prompt]
+    if "interface" in config and "dmenu_cmdline" in config["interface"]:
+        cmdline = shlex.split(config["interface"]["dmenu_cmdline"].format(prompt=prompt))
+
+    proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
 
 
@@ -58,7 +63,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
             playlists[playlist.name] = str(playlist.uri)
 
         if args.playlist_dmenu:
-            playlist = dmenu_query("playlist to play", options=list(playlists.keys()))
+            playlist = dmenu_query("playlist to play", options=list(playlists.keys()), config=config)
             if len(playlist) > 0 and playlist[0] in playlists:
                 elements = [playlists[playlist[0]]]
 
@@ -89,7 +94,7 @@ def pause(client: spotifython.Client, args: argparse.Namespace, config: configpa
     client.pause(device_id=device_id)
 
 
-def play_pause(client: spotifython.Client, args: argparse.Namespace, config:configparser, cache_dir: str, **_):
+def play_pause(client: spotifython.Client, args: argparse.Namespace, config: configparser, cache_dir: str, **_):
     if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
         try:
             with open(os.path.join(cache_dir, "status")) as cache_file:
@@ -271,7 +276,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
             playlists[playlist.name] = playlist
 
         if args.playlist_dmenu:
-            names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
+            names = dmenu_query(prompt="playlist to choose song from: ", options=list(playlists.keys()), config=config)
             if len(names) == 0 or names[0] not in playlists.keys():
                 return
             playlist = playlists[names[0]]
@@ -290,7 +295,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
 
     if not args.dmenu:
         return
-    names = dmenu_query("songs to add to queue: ", options=list(tracks.keys()))
+    names = dmenu_query("songs to add to queue: ", options=list(tracks.keys()), config=config)
     add_names(titles=names, tracks=tracks)
 
 
