@@ -389,11 +389,14 @@ def generate_parser() -> argparse.ArgumentParser:
 
 
 def main():
-    cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
-    if not os.path.exists(cache_dir):
-        os.mkdir(cache_dir, mode=0o755)
+    cache_dir = None
     config = configparser.ConfigParser()
-    config.read(os.path.expanduser("~/.config/spotifython-cli/config"))
+
+    if sys.platform.startswith("linux"):
+        cache_dir = os.path.join(os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "spotifython-cli")
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir, mode=0o755)
+        config.read(os.path.join(os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "spotifython-cli", "config"))
 
     args = generate_parser().parse_args()
 
