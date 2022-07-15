@@ -8,14 +8,20 @@ import sys
 import argparse
 import time
 from distutils.util import strtobool
+import random
 
 
-def dmenu_query(title: str, options: list[str]) -> list[str]:
+def dmenu_query(prompt: str, options: list[str], config: configparser.ConfigParser) -> list[str]:
     import subprocess
+    import shlex
 
     input_str = "\n".join(options) + "\n"
 
-    proc = subprocess.Popen(["dmenu", "-i", "-l", "50", "-p", title], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    cmdline = ["dmenu", "-i", "-l", "50", "-p", prompt]
+    if "interface" in config and "dmenu_cmdline" in config["interface"]:
+        cmdline = shlex.split(config["interface"]["dmenu_cmdline"].format(prompt=f"'{prompt}'"))
+
+    proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
     return str(proc.communicate(bytes(input_str, encoding="utf-8"))[0], encoding="utf-8").split("\n")
 
 
@@ -37,13 +43,21 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
 # noinspection PyShadowingNames
 def play(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
-    def play_elements(client: spotifython.Client, uri_strings: list[str], device_id: str = None):
-        uris = [spotifython.URI(uri_string=uri_string) for uri_string in uri_strings]
-        if len(uris) == 1 and issubclass(uris[0].type, spotifython.PlayContext):
-            client.play(context=uris[0], device_id=device_id)
+    def play_elements(client: spotifython.Client, elements: list, device_id: str = None, shuffle: bool = None):
+        if len(elements) == 1 and isinstance(elements[0], spotifython.PlayContext) and shuffle is not True:
+            client.play(context=elements[0].uri, device_id=device_id)
             return
 
-        uris = [uri for uri in uris if issubclass(uri.type, spotifython.Playable)]
+        uris = []
+        for element in elements:
+            if isinstance(element, spotifython.Playable):
+                uris.append(element.uri)
+            elif isinstance(element, spotifython.PlayContext):
+                uris += [item.uri for item in element.items]
+
+        if shuffle is True:
+            random.shuffle(uris)
+
         if len(uris) == 0:
             client.play(device_id=device_id)
             return
@@ -51,22 +65,24 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
-    elements = args.elements
+    elements:list = [client.get_element(uri=element) for element in args.elements]
     if args.playlist_dmenu or args.playlist is not None:
-        playlists = {"saved tracks": str(client.me.uri) + ":collection"}
+        playlists = {"saved tracks": client.saved_tracks}
         for playlist in client.user_playlists:
-            playlists[playlist.name] = str(playlist.uri)
+            playlists[playlist.name] = playlist
 
         if args.playlist_dmenu:
-            playlist = dmenu_query("playlist to play", options=list(playlists.keys()))
-            if len(playlist) > 0 and playlist[0] in playlists:
-                elements = [playlists[playlist[0]]]
+            choosen_playlists = dmenu_query("playlist to play", options=list(playlists.keys()), config=config)
+            if len(choosen_playlists) > 0:
+                for playlist in choosen_playlists:
+                    if playlist in playlists.keys():
+                        elements.append(playlists[playlist])
 
         if args.playlist is not None:
-            elements = [playlists[args.playlist]]
+            elements.append(playlists[args.playlist])
 
     try:
-        play_elements(client, elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
         if shuffle is not None:
             client.set_playback_shuffle(shuffle, device_id=device_id)
 
@@ -80,7 +96,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
                 client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
-        play_elements(client, elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
 
 
 # noinspection PyShadowingNames
@@ -89,13 +105,39 @@ def pause(client: spotifython.Client, args: argparse.Namespace, config: configpa
     client.pause(device_id=device_id)
 
 
+def play_pause(client: spotifython.Client, args: argparse.Namespace, config: configparser, cache_dir: str, **_):
+    if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
+        try:
+            with open(os.path.join(cache_dir, "status")) as cache_file:
+                data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        except json.decoder.JSONDecodeError:
+            data = client.get_playing()
+    else:
+        data = client.get_playing()
+
+    if data is None or not data["is_playing"]:
+        play(client=client, args=args, config=config)
+    else:
+        pause(client=client, args=args, config=config)
+
+
 # noinspection PyShadowingNames
 def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespace, **_):
     if args.use_cache and os.path.exists(os.path.join(cache_dir, "status")):
-        with open(os.path.join(cache_dir, "status")) as cache_file:
-            data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        try:
+            with open(os.path.join(cache_dir, "status")) as cache_file:
+                data = {k: client.get_element_from_data(v) if isinstance(v, dict) and "uri" in v.keys() else v for k, v in json.load(cache_file).items()}
+        except json.decoder.JSONDecodeError:
+            data = client.get_playing()
     else:
         data = client.get_playing()
+    if data is None:
+        data = {
+            "is_playing": False,
+            "item": None,
+            "context": None,
+            "device": None,
+            }
     print_data = {}
 
     data["title"] = data["item"].name if data["item"] is not None else None
@@ -103,7 +145,7 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
     data["context_name"] = data["context"].name if data["context"] is not None else None
     data["artist"] = data["item"].artists[0] if data["item"] is not None else None
     data["artist_name"] = data["artist"].name if data["artist"] is not None else None
-    data["device_id"] = data["device"]["id"]
+    data["device_id"] = data["device"]["id"] if data["device"] is not None else None
 
     for key in data.keys():
         if key in args.fields:
@@ -163,23 +205,37 @@ def spotifyd(client: spotifython.Client, args: argparse.Namespace, cache_dir: st
             subprocess.run(["notify-send", image, f'{title}', f'{desc}'])
 
     data = client.get_playing()
+    if data is None:
+        data = {
+            "is_playing": False,
+            "item": None,
+            "context": None,
+            "device": None,
+        }
+        with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
+            json.dump(data, cache_file)
+            return
     element = data["item"]
     desc = element.artists[0].name + " - " + element.album.name
 
     do_notify = True
     if os.path.exists(os.path.join(cache_dir, "status")):
-        with open(os.path.join(cache_dir, "status"), 'r') as cache_file:
-            cached_data = json.load(cache_file)
-            if cached_data["item"]["uri"] == str(element.uri):
-                do_notify = False
+        try:
+            with open(os.path.join(cache_dir, "status"), 'r') as cache_file:
+                cached_data = json.load(cache_file)
+                if cached_data["item"]["uri"] == str(element.uri):
+                    do_notify = False
+        except (json.decoder.JSONDecodeError, TypeError, KeyError):
+            # cache is invalid so we won't use it
+            pass
 
     with open(os.path.join(cache_dir, "status"), 'w') as cache_file:
         json.dump({k: v.to_dict(minimal=True) if isinstance(v, spotifython.Cacheable) else v for k, v in data.items()}, cache_file)
 
     if not data["is_playing"]:
-        quit()
+        return
 
-    if "spotifyd" in config.keys() and "notify" in config["spotifyd"].keys() and not config["spotifyd"]["notify"]:
+    if "spotifyd" in config and "notify" in config["spotifyd"] and not config["spotifyd"]["notify"]:
         do_notify = False
 
     if not args.disable_notify and do_notify:
@@ -231,14 +287,14 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
             playlists[playlist.name] = playlist
 
         if args.playlist_dmenu:
-            names = dmenu_query(title="playlist to choose song from: ", options=list(playlists.keys()))
+            names = dmenu_query(prompt="playlist to choose song from: ", options=list(playlists.keys()), config=config)
             if len(names) == 0 or names[0] not in playlists.keys():
-                quit(1)
+                return
             playlist = playlists[names[0]]
         else:
             if args.playlist not in playlists.keys():
                 logging.error(f"playlist {args.playlist} not found")
-                quit(1)
+                return
             playlist = playlists[args.playlist]
 
     items = playlist.items
@@ -250,7 +306,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
 
     if not args.dmenu:
         return
-    names = dmenu_query("songs to add to queue: ", options=list(tracks.keys()))
+    names = dmenu_query("songs to add to queue: ", options=list(tracks.keys()), config=config)
     add_names(titles=names, tracks=tracks)
 
 
@@ -265,12 +321,16 @@ def generate_parser() -> argparse.ArgumentParser:
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     play_parser.add_argument("-s", "--shuffle", help="True/False")
     play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
-    play_parser.add_argument("elements", help="uris of the songs or playlist to start playing", nargs="*")
+    play_parser.add_argument("elements", help="uris of the songs or playlists to start playing", nargs="*")
     play_parser.set_defaults(command=play)
 
     pause_parser = subparsers.add_parser("pause", help=(desc_str := "pause playback"), description=desc_str)
     pause_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     pause_parser.set_defaults(command=pause)
+
+    play_pause_parser = subparsers.add_parser("play-pause", help=(desc_str := "toggle between play/pause"), description=desc_str)
+    play_pause_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
+    play_pause_parser.set_defaults(command=play_pause, shuffle=None, elements=[], playlist=None, playlist_dmenu=None)
 
     metadata_parser = subparsers.add_parser(
         "metadata",
@@ -317,6 +377,8 @@ def generate_parser() -> argparse.ArgumentParser:
 
         metadata_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
 
+        play_pause_parser.add_argument("-c", "--use-cache", action="store_true", help="Use the spotifyd cache instead of querying the api. Works only if spotifython-cli is spotifyd song_change_hook. (see 'spotifython-cli spotifyd -h')")
+
         queue_playlist_group.add_argument("--playlist-dmenu", help="query the user for the playlist name using dmenu", action="store_true")
         queue_playlist_parser.add_argument("--dmenu", help="query the user for additional titles using dmenu", action="store_true")
 
@@ -324,15 +386,28 @@ def generate_parser() -> argparse.ArgumentParser:
         spotifyd_parser.add_argument("-n", "--disable-notify", help="don't send a notification via notify-send if the playerstate updates", action="store_true")
         spotifyd_parser.set_defaults(command=spotifyd)
 
+    else:
+        play_parser.set_defaults(playlist_dmenu=False)
+
+        metadata_parser.set_defaults(use_cache=False)
+
+        play_pause_parser.set_defaults(use_cache=False)
+
+        queue_playlist_group.set_defaults(playlist_dmenu=False)
+        queue_playlist_parser.set_defaults(dmenu=False)
+
     return parser
 
 
 def main():
-    cache_dir = os.path.expanduser("~/.cache/spotifython-cli")
-    if not os.path.exists(cache_dir):
-        os.mkdir(cache_dir, mode=0o755)
+    cache_dir = None
     config = configparser.ConfigParser()
-    config.read(os.path.expanduser("~/.config/spotifython-cli/config"))
+
+    if sys.platform.startswith("linux"):
+        cache_dir = os.path.join(os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "spotifython-cli")
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir, mode=0o755)
+        config.read(os.path.join(os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "spotifython-cli", "config"))
 
     args = generate_parser().parse_args()
 

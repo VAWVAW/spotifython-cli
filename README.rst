@@ -68,4 +68,8 @@ Config
     [playback]
     device_id = "your playback device"  # optional
 
+    [interface]
+    # dmenu with custom options or a program with a similar interface (gets options on stdin and writes results to stdout)
+    dmenu_cmdline = dmenu -i -l 50 -p {prompt} # optional
+
 For help on how to obtain client id and secret refer to the `spotifython documentation <https://github.com/vawvaw/spotifython>`_.
