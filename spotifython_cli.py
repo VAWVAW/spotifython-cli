@@ -8,6 +8,7 @@ import sys
 import argparse
 import time
 from distutils.util import strtobool
+import random
 
 
 def dmenu_query(prompt: str, options: list[str], config: configparser.ConfigParser) -> list[str]:
@@ -42,13 +43,21 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
 # noinspection PyShadowingNames
 def play(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
-    def play_elements(client: spotifython.Client, uri_strings: list[str], device_id: str = None):
-        uris = [spotifython.URI(uri_string=uri_string) for uri_string in uri_strings]
-        if len(uris) == 1 and issubclass(uris[0].type, spotifython.PlayContext):
-            client.play(context=uris[0], device_id=device_id)
+    def play_elements(client: spotifython.Client, elements: list, device_id: str = None, shuffle: bool = None):
+        if len(elements) == 1 and isinstance(elements[0], spotifython.PlayContext) and shuffle is not True:
+            client.play(context=elements[0].uri, device_id=device_id)
             return
 
-        uris = [uri for uri in uris if issubclass(uri.type, spotifython.Playable)]
+        uris = []
+        for element in elements:
+            if isinstance(element, spotifython.Playable):
+                uris.append(element.uri)
+            elif isinstance(element, spotifython.PlayContext):
+                uris += [item.uri for item in element.items]
+
+        if shuffle is True:
+            random.shuffle(uris)
+
         if len(uris) == 0:
             client.play(device_id=device_id)
             return
@@ -56,22 +65,24 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
-    elements = args.elements
+    elements:list = [client.get_element(uri=element) for element in args.elements]
     if args.playlist_dmenu or args.playlist is not None:
-        playlists = {"saved tracks": str(client.me.uri) + ":collection"}
+        playlists = {"saved tracks": client.saved_tracks}
         for playlist in client.user_playlists:
-            playlists[playlist.name] = str(playlist.uri)
+            playlists[playlist.name] = playlist
 
         if args.playlist_dmenu:
-            playlist = dmenu_query("playlist to play", options=list(playlists.keys()), config=config)
-            if len(playlist) > 0 and playlist[0] in playlists:
-                elements = [playlists[playlist[0]]]
+            choosen_playlists = dmenu_query("playlist to play", options=list(playlists.keys()), config=config)
+            if len(choosen_playlists) > 0:
+                for playlist in choosen_playlists:
+                    if playlist in playlists.keys():
+                        elements.append(playlists[playlist])
 
         if args.playlist is not None:
-            elements = [playlists[args.playlist]]
+            elements.append(playlists[args.playlist])
 
     try:
-        play_elements(client, elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
         if shuffle is not None:
             client.set_playback_shuffle(shuffle, device_id=device_id)
 
@@ -85,7 +96,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
                 client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
-        play_elements(client, elements, device_id=device_id)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
 
 
 # noinspection PyShadowingNames
@@ -310,7 +321,7 @@ def generate_parser() -> argparse.ArgumentParser:
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     play_parser.add_argument("-s", "--shuffle", help="True/False")
     play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
-    play_parser.add_argument("elements", help="uris of the songs or playlist to start playing", nargs="*")
+    play_parser.add_argument("elements", help="uris of the songs or playlists to start playing", nargs="*")
     play_parser.set_defaults(command=play)
 
     pause_parser = subparsers.add_parser("pause", help=(desc_str := "pause playback"), description=desc_str)
