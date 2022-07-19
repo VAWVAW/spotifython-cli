@@ -61,7 +61,11 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
         if len(uris) == 0:
             client.play(device_id=device_id)
             return
-        client.play(uris, device_id=device_id)
+        try:
+            client.play(uris, device_id=device_id)
+        except spotifython.PayloadToLarge:
+            uris = uris[0:500]
+            client.play(uris, device_id=device_id)
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
