@@ -43,7 +43,7 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
 # noinspection PyShadowingNames
 def play(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
-    def play_elements(client: spotifython.Client, elements: list, device_id: str = None, shuffle: bool = None):
+    def play_elements(client: spotifython.Client, elements: list, device_id: str = None, shuffle: bool = None, reverse: bool = None):
         if len(elements) == 1 and isinstance(elements[0], spotifython.PlayContext) and shuffle is not True:
             client.play(context=elements[0].uri, device_id=device_id)
             return
@@ -58,6 +58,9 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
         if shuffle is True:
             random.shuffle(uris)
 
+        if reverse is True:
+            uris.reverse()
+
         if len(uris) == 0:
             client.play(device_id=device_id)
             return
@@ -69,7 +72,8 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
-    elements:list = [client.get_element(uri=element) for element in args.elements]
+    reverse = bool(strtobool(args.reverse)) if args.reverse is not None else None
+    elements: list = [client.get_element(uri=element) for element in args.elements]
     if args.playlist_dmenu or args.playlist is not None:
         playlists = {"saved tracks": client.saved_tracks}
         for playlist in client.user_playlists:
@@ -86,7 +90,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
             elements.append(playlists[args.playlist])
 
     try:
-        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle, reverse=reverse)
         if shuffle is not None:
             client.set_playback_shuffle(shuffle, device_id=device_id)
 
@@ -100,7 +104,7 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
                 client.set_playback_shuffle(state=True, device_id=device_id)
         else:
             time.sleep(1)
-        play_elements(client, elements, device_id=device_id, shuffle=shuffle)
+        play_elements(client, elements, device_id=device_id, shuffle=shuffle, reverse=reverse)
 
 
 # noinspection PyShadowingNames
@@ -324,6 +328,7 @@ def generate_parser() -> argparse.ArgumentParser:
     play_parser = subparsers.add_parser("play", help=(desc_str := "start playback"), description=desc_str)
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
     play_parser.add_argument("-s", "--shuffle", help="True/False")
+    play_parser.add_argument("-r", "--reverse", help="True/False")
     play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
     play_parser.add_argument("elements", help="uris of the songs or playlists to start playing", nargs="*")
     play_parser.set_defaults(command=play)
