@@ -44,7 +44,7 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
 def play(client: spotifython.Client, args: argparse.Namespace, config: configparser.ConfigParser, **_):
     # noinspection PyShadowingNames
     def play_elements(client: spotifython.Client, elements: list, device_id: str = None, shuffle: bool = None, reverse: bool = None):
-        if len(elements) == 1 and isinstance(elements[0], spotifython.PlayContext) and shuffle is not True:
+        if len(elements) == 1 and isinstance(elements[0], spotifython.PlayContext) and shuffle is not True and reverse is not True:
             client.play(context=elements[0].uri, device_id=device_id)
             return
 
