@@ -32,10 +32,21 @@ def load_authentication(cache_dir: str, config: configparser.ConfigParser = None
         with open(os.path.join(cache_dir, "authentication"), 'r') as auth_file:
             authentication = spotifython.Authentication.from_dict(json.load(auth_file))
     else:
+        if "client_secret" in config["Authentication"].keys():
+            client_secret = config["Authentication"]["client_secret"]
+        else:
+            assert "client_secret_command" in config["Authentication"].keys()
+            import subprocess
+            import shlex
+            cmdline = shlex.split(config["Authentication"]["client_secret_command"])
+            proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE)
+            client_secret = str(proc.communicate()[0], encoding="utf-8").strip()
+
         authentication = spotifython.Authentication(
             client_id=config["Authentication"]["client_id"],
-            client_secret=config["Authentication"]["client_secret"],
-            scope="playlist-read-private user-modify-playback-state user-library-read user-read-playback-state user-read-currently-playing user-read-recently-played user-read-playback-position user-read-private"
+            client_secret=client_secret,
+            scope="playlist-read-private user-modify-playback-state user-library-read user-read-playback-state "
+                  "user-read-currently-playing user-read-recently-played user-read-playback-position user-read-private "
         )
     return authentication
 
