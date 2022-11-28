@@ -61,6 +61,8 @@ Config
     [Authentication]
     client_id = "your client id
     client_secret = "your client secret"
+    # alternative to client_secret
+    client_secret_command = "cat /path/to/client_secret"
 
     [spotifyd]
     notify = true   # optional
