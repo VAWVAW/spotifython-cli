@@ -350,7 +350,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     play_pause_parser = subparsers.add_parser("play-pause", help=(desc_str := "toggle between play/pause"), description=desc_str)
     play_pause_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    play_pause_parser.set_defaults(command=play_pause, shuffle=None, elements=[], playlist=None, playlist_dmenu=None)
+    play_pause_parser.set_defaults(command=play_pause, shuffle=None, reverse=None, elements=[], playlist=None, playlist_dmenu=None)
 
     metadata_parser = subparsers.add_parser(
         "metadata",
