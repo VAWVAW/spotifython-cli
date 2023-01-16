@@ -299,7 +299,7 @@ def add_queue_playlist(client: spotifython.Client, args: argparse.Namespace, con
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
     if args.playlist_uri is not None:
-        playlist = client.get_playlist(args.playlist_uri, check_outdated=False)
+        playlist = client.get_playlist(args.playlist_uri)
     else:
         playlists = {"saved tracks": client.saved_tracks}
         for playlist in client.user_playlists:
