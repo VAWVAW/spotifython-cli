@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python3
 import logging
 import spotifython
 import configparser
@@ -7,7 +7,6 @@ import os
 import sys
 import argparse
 import time
-from distutils.util import strtobool
 import random
 
 
@@ -82,8 +81,8 @@ def play(client: spotifython.Client, args: argparse.Namespace, config: configpar
             client.play(uris, device_id=device_id)
 
     device_id = args.id or config["playback"]["device_id"] if "playback" in config and "device_id" in config["playback"] else None
-    shuffle = bool(strtobool(args.shuffle)) if args.shuffle is not None else None
-    reverse = bool(strtobool(args.reverse)) if args.reverse is not None else None
+    shuffle = args.shuffle
+    reverse = args.reverse
     elements: list = [client.get_element(uri=element) for element in args.elements]
     if args.playlist_dmenu or args.playlist is not None:
         playlists = {"saved tracks": client.saved_tracks}
@@ -198,8 +197,7 @@ def metadata(client: spotifython.Client, cache_dir: str, args: argparse.Namespac
 
 # noinspection PyShadowingNames
 def shuffle(client: spotifython.Client, args: argparse.Namespace, **_):
-    shuffle = bool(strtobool(args.state))
-    client.set_playback_shuffle(state=shuffle, device_id=args.id)
+    client.set_playback_shuffle(state=not args.disable, device_id=args.id)
 
 
 # noinspection PyShadowingNames
@@ -338,8 +336,8 @@ def generate_parser() -> argparse.ArgumentParser:
 
     play_parser = subparsers.add_parser("play", help=(desc_str := "start playback"), description=desc_str)
     play_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    play_parser.add_argument("-s", "--shuffle", help="True/False")
-    play_parser.add_argument("-r", "--reverse", help="True/False")
+    play_parser.add_argument("-s", "--shuffle", action=argparse.BooleanOptionalAction)
+    play_parser.add_argument("-r", "--reverse", action=argparse.BooleanOptionalAction)
     play_parser.add_argument("--playlist", help="name of the playlist in the library to play")
     play_parser.add_argument("elements", help="uris of the songs or playlists to start playing", nargs="*")
     play_parser.set_defaults(command=play)
@@ -370,7 +368,7 @@ def generate_parser() -> argparse.ArgumentParser:
 
     shuffle_parser = subparsers.add_parser("shuffle", help=(desc_str := "set shuffle state"), description=desc_str)
     shuffle_parser.add_argument("--device-id", help="id of the device to use for playback", dest="id")
-    shuffle_parser.add_argument("state", default="True", help="True/False", nargs="?")
+    shuffle_parser.add_argument("--disable", action="store_true", help="disable shuffle")
     shuffle_parser.set_defaults(command=shuffle)
 
     next_parser = subparsers.add_parser("next", help=(desc_str := "skip to next song"), description=desc_str)
