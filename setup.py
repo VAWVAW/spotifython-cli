@@ -5,7 +5,7 @@ with open("README.rst", "r", encoding="utf-8") as f:
 
 setuptools.setup(
     name="spotifython-cli",
-    version="0.2.2",
+    version="0.3.1",
     author="VAWVAW",
     author_email="vawvaw@vaw-valentin.de",
     description="A command line interface for spotifython intended for use with spotifyd",
@@ -24,14 +24,12 @@ setuptools.setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Natural Language :: English",
         "Operating System :: OS Independent",
-        'Topic :: Internet',
-        'Topic :: Utilities',
+        "Topic :: Internet",
+        "Topic :: Utilities",
         "Typing :: Typed",
     ],
     py_modules=["spotifython_cli"],
-    install_requires=["spotifython>=0.2.1"],
+    install_requires=["spotifython>=0.2.7", "click"],
     python_requires=">=3.10",
-    entry_points={
-        "console_scripts": ["spotifython-cli=spotifython_cli:main"]
-    }
+    entry_points={"console_scripts": ["spotifython-cli=spotifython_cli:cli"]},
 )

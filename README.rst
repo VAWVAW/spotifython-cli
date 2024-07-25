@@ -43,7 +43,7 @@ With dmenu:
 
 .. code:: sh
 
-    spotifython-cli queue playlist --playlist-dmenu --dmenu
+    spotifython-cli play --queue 'saved@#ask@#ask'
 
 Or for scripting:
 
