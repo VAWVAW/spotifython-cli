@@ -110,12 +110,21 @@ class UriType(click.ParamType):
             case "saved":
                 if len(terms) == 0:
                     self.fail("no collection specicied")
-                options = {"#saved tracks": ctx.client.saved_tracks} | {
-                    playlist.name.replace("\\", "\\\\")
-                    .replace("#", "\\#")
-                    .replace("@", "\\@"): playlist
-                    for playlist in ctx.client.user_playlists
-                }
+                options = (
+                    {"#saved tracks": ctx.client.saved_tracks}
+                    | {
+                        playlist.name.replace("\\", "\\\\")
+                        .replace("#", "\\#")
+                        .replace("@", "\\@"): playlist
+                        for playlist in ctx.client.user_playlists
+                    }
+                    | {
+                        album.name.replace("\\", "\\\\")
+                        .replace("#", "\\#")
+                        .replace("@", "\\@"): album
+                        for album in ctx.client.saved_albums
+                    }
+                )
                 term = terms.pop(0)
                 if term == "#ask":
                     try:
@@ -258,6 +267,11 @@ class UriType(click.ParamType):
                         .replace("#", "\\#")
                         .replace("@", "\\@"): playlist
                         for playlist in client.user_playlists
+                    } | {
+                        album.name.replace("\\", "\\\\")
+                        .replace("#", "\\#")
+                        .replace("@", "\\@"): album
+                        for album in client.saved_albums
                     }
                     ret = [o for o in options.keys() if o.startswith(terms[1])]
                     if terms[1] in ret and len(terms) > 2:
@@ -406,7 +420,7 @@ def play(
 
     Elements begin with either a spotify uri or the literal string "search" or "saved". Specifiers are seperated by an '@'.
 
-    After "saved" must be the name of a saved playlist or "#saved tracks".
+    After "saved" must be the name of a saved playlist, saved album or "#saved tracks".
 
     After "search" must be the search term. The search results will be displayed using the config value `interface.dmenu_cmdline`. If that is not specicied, the first song will be used.
 
