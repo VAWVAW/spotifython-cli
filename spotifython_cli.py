@@ -1,12 +1,13 @@
+from collections.abc import Mapping
 import json
 import os
-import dataclasses
 import random
 import time
 import re
 
 import spotifython
 import click
+from click import shell_completion
 import configparser
 import logging
 
@@ -35,7 +36,8 @@ def load_authentication(
             client_id=config["Authentication"]["client_id"],
             client_secret=client_secret,
             scope="playlist-read-private user-modify-playback-state user-library-read user-read-playback-state "
-            "user-read-currently-playing user-read-recently-played user-read-playback-position user-read-private ",
+            "user-read-currently-playing user-read-recently-played user-read-playback-position user-read-private "
+            "playlist-modify-public playlist-modify-private",
         )
     return authentication
 
@@ -65,7 +67,7 @@ def dmenu_query(
 
 def dmenu_select(
     prompt: str,
-    options: dict[str, spotifython.Cacheable],
+    options: Mapping[str, spotifython.Cacheable],
     config: configparser.ConfigParser,
 ) -> list[spotifython.Cacheable]:
     selected = dmenu_query(prompt, list(options.keys()), config)
@@ -97,11 +99,21 @@ class UriType(click.ParamType):
     name = "spotify element uri or identifier"
 
     def convert(
-        self, value: str | tuple[spotifython.URI], _param, context
+        self, value: str | tuple[spotifython.URI], param, ctx: click.Context | None
     ) -> tuple[spotifython.URI]:
+        # param is unused
+        del param
+
         if isinstance(value, tuple):
             return value
-        ctx: Context = context.find_object(Context)
+
+        if ctx is not None:
+            if (tmp := ctx.find_object(Context)) is not None:
+                context: Context = tmp
+            else:
+                return tuple()
+        else:
+            return tuple()
 
         elements = []
 
@@ -111,24 +123,24 @@ class UriType(click.ParamType):
                 if len(terms) == 0:
                     self.fail("no collection specicied")
                 options = (
-                    {"#saved tracks": ctx.client.saved_tracks}
+                    {"#saved tracks": context.client.saved_tracks}
                     | {
                         playlist.name.replace("\\", "\\\\")
                         .replace("#", "\\#")
                         .replace("@", "\\@"): playlist
-                        for playlist in ctx.client.user_playlists
+                        for playlist in context.client.user_playlists
                     }
                     | {
                         album.name.replace("\\", "\\\\")
                         .replace("#", "\\#")
                         .replace("@", "\\@"): album
-                        for album in ctx.client.saved_albums
+                        for album in context.client.saved_albums
                     }
                 )
                 term = terms.pop(0)
                 if term == "#ask":
                     try:
-                        elements = dmenu_select("collection: ", options, ctx.config)
+                        elements = dmenu_select("collection: ", options, context.config)
                     except FileNotFoundError:
                         self.fail(
                             "config option `interface.dmenu_cmdline` is not configured correctly"
@@ -143,14 +155,14 @@ class UriType(click.ParamType):
                 term = terms.pop(0)
                 if term == "#ask":
                     try:
-                        term = dmenu_query("search:", [], ctx.config)[0]
+                        term = dmenu_query("search:", [], context.config)[0]
                     except FileNotFoundError:
                         self.fail(
                             "config option `interface.dmenu_cmdline` is not configured correctly"
                         )
                 if term == "":
-                    return ()
-                results = ctx.client.search(
+                    return tuple()
+                results = context.client.search(
                     term, "album,playlist,track,episode,show", limit=10
                 )
                 try:
@@ -159,9 +171,9 @@ class UriType(click.ParamType):
                         for type_name, elements in results.items()
                         for elem in elements
                     }
-                    elements = dmenu_select("results: ", options, ctx.config)
+                    elements = dmenu_select("results: ", options, context.config)
                 except FileNotFoundError:
-                    logging.warn(
+                    logging.warning(
                         "config option `interface.dmenu_cmdline` is not configured correctly"
                     )
                     if len(results["tracks"]) == 0:
@@ -169,9 +181,9 @@ class UriType(click.ParamType):
                     elements.append(results["tracks"][0])
             case uri:
                 try:
-                    elements.append(ctx.client.get_element(spotifython.URI(uri)))
+                    elements.append(context.client.get_element(spotifython.URI(uri)))
                 except AssertionError as e:
-                    self.fail(e)
+                    self.fail(str(e))
 
         logging.debug(f"selecting from: {elements}")
         ret = []
@@ -191,29 +203,32 @@ class UriType(click.ParamType):
             if terms[0] == "#ask":
                 options = {item.name: item for item in elem.items}
                 try:
-                    ret += dmenu_select("songs: ", options, ctx.config)
+                    ret += dmenu_select("songs: ", options, context.config)
                 except FileNotFoundError:
                     self.fail(
                         "config option `interface.dmenu_cmdline` is not configured correctly"
                     )
             ret += [item for item in elem.items if item.name.startswith(terms[0])]
         logging.debug(f"selected: {ret}")
-        return (elem.uri for elem in ret)
+        return tuple(elem.uri for elem in ret)
 
     def complete_initial(
         self,
         client: spotifython.Client,
         terms: list[str],
-    ) -> list["CompletionItem"] | tuple[str, spotifython.Cacheable | None]:
-        from click.shell_completion import CompletionItem
-
+    ) -> (
+        list[shell_completion.CompletionItem] | tuple[str, spotifython.Cacheable | None]
+    ):
         match terms[0][:2]:
             case "sp":  # spotify uri
                 uri_types = ["album", "playlist", "show", "track", "episode"]
                 uri_elems = terms[0].split(":")
 
                 if uri_elems[0] != "spotify" or len(uri_elems) == 1:
-                    return [CompletionItem("spotify:"), CompletionItem("spotify:_")]
+                    return [
+                        shell_completion.CompletionItem("spotify:"),
+                        shell_completion.CompletionItem("spotify:_"),
+                    ]
                 if uri_elems[1] in uri_types:
                     prefix = terms[0]
                     try:
@@ -231,15 +246,18 @@ class UriType(click.ParamType):
                         ret.append(ret[0] + "_")
                     elif len(ret) == 0:
                         ret = [f"spotify:{t}:" for t in uri_types]
-                    return [CompletionItem(e) for e in ret]
+                    return [shell_completion.CompletionItem(e) for e in ret]
             case "se":  # search
                 if len(terms) < 2:
-                    return [CompletionItem("search@"), CompletionItem("search@_")]
+                    return [
+                        shell_completion.CompletionItem("search@"),
+                        shell_completion.CompletionItem("search@_"),
+                    ]
                 if terms[1].startswith("#"):
                     if terms[1] != "#ask":
                         return [
-                            CompletionItem("search@#ask"),
-                            CompletionItem("search@#ask_"),
+                            shell_completion.CompletionItem("search@#ask"),
+                            shell_completion.CompletionItem("search@#ask_"),
                         ]
                     terms.pop(0)
                     terms.pop(0)
@@ -251,12 +269,15 @@ class UriType(click.ParamType):
                     return (f"search@{terms.pop(0)}@", None)
             case "sa":  # saved
                 if len(terms) < 2:
-                    return [CompletionItem("saved@"), CompletionItem("saved@_")]
+                    return [
+                        shell_completion.CompletionItem("saved@"),
+                        shell_completion.CompletionItem("saved@_"),
+                    ]
                 if terms[1].startswith("#"):
                     if terms[1] != "#saved tracks":
                         return [
-                            CompletionItem("saved@#saved tracks"),
-                            CompletionItem("saved@#saved tracks_"),
+                            shell_completion.CompletionItem("saved@#saved tracks"),
+                            shell_completion.CompletionItem("saved@#saved tracks_"),
                         ]
                     terms.pop(0)
                     terms.pop(0)
@@ -283,21 +304,23 @@ class UriType(click.ParamType):
                     else:
                         if len(ret) == 0 or terms[1] == "":
                             ret = list(options.keys()) + ["#saved tracks"]
-                        return [CompletionItem(f"saved@{e}") for e in ret]
+                        return [
+                            shell_completion.CompletionItem(f"saved@{e}") for e in ret
+                        ]
         return [
-            CompletionItem("saved@", help="saved collections"),
-            CompletionItem("search@", help="spotify general search"),
-            CompletionItem("spotify\:", help="spotify uri"),
+            shell_completion.CompletionItem("saved@", help="saved collections"),
+            shell_completion.CompletionItem("search@", help="spotify general search"),
+            shell_completion.CompletionItem("spotify\\:", help="spotify uri"),
         ]
 
-    def shell_complete(self, context, _param, incomplete) -> list["CompletionItem"]:
-        from click.shell_completion import CompletionItem
+    def shell_complete(
+        self, ctx, param, incomplete
+    ) -> list[shell_completion.CompletionItem]:
+        # param is unused
+        del param
 
-        try:
-            ctx = Context(context.find_root().params)
-            client = ctx.client
-        except:
-            client = None
+        context = Context(ctx.find_root().params)
+        client = context.client
         terms = re.split(r"(?<!(?<!\\)\\)@", incomplete)
 
         try:
@@ -311,23 +334,29 @@ class UriType(click.ParamType):
         elem = ret[1]
 
         if isinstance(elem, spotifython.Playable):
-            return [CompletionItem(prefix)]
+            return [shell_completion.CompletionItem(prefix)]
 
         if len(terms) == 0:
-            return [CompletionItem(prefix), CompletionItem(prefix + "_")]
+            return [
+                shell_completion.CompletionItem(prefix),
+                shell_completion.CompletionItem(prefix + "_"),
+            ]
 
         # assume playlist
 
         if terms[0].startswith("#"):
             possible = [o for o in ("#ask", "#all") if o.startswith(terms[0])]
             if len(possible) == 1:
-                return [CompletionItem(prefix + "@" + possible[0])]
-            return [CompletionItem(prefix + "@#ask"), CompletionItem(prefix + "@#all")]
+                return [shell_completion.CompletionItem(prefix + "@" + possible[0])]
+            return [
+                shell_completion.CompletionItem(prefix + "@#ask"),
+                shell_completion.CompletionItem(prefix + "@#all"),
+            ]
 
         if elem is None:
             return [
-                CompletionItem(prefix + "@" + terms[0]),
-                CompletionItem(prefix + "@" + terms[0] + "_"),
+                shell_completion.CompletionItem(prefix + "@" + terms[0]),
+                shell_completion.CompletionItem(prefix + "@" + terms[0] + "_"),
             ]
 
         assert isinstance(elem, spotifython.PlayContext)
@@ -338,28 +367,30 @@ class UriType(click.ParamType):
         if len(possible) == 0:
             possible = options
 
-        return [CompletionItem(prefix + "@" + opt) for opt in possible]
+        return [shell_completion.CompletionItem(prefix + "@" + opt) for opt in possible]
 
 
 class Context:
-    def __init__(self, cli_params: dict[str, any]):
-        self._auth = None
-        self.config = configparser.ConfigParser()
+    def __init__(self, cli_params: dict[str, str]):
+        self._auth: spotifython.Authentication | None = None
+        self.config: configparser.ConfigParser = configparser.ConfigParser()
         self.config.read(cli_params["config"])
 
-        self._cache_dir = os.path.join(
+        self._cache_dir: str = os.path.join(
             os.getenv(
                 "XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache")
             ),
             "spotifython-cli",
         )
-        self._auth = load_authentication(cache_dir=self._cache_dir, config=self.config)
-        self.client = spotifython.Client(
+        self._auth = load_authentication(
+            cache_dir=self._cache_dir, config=self.config
+        )
+        self.client: spotifython.Client = spotifython.Client(
             cache_dir=self._cache_dir,
             authentication=self._auth,
         )
 
-        self.device_id = (
+        self.device_id: str | None = (
             cli_params["device_id"] or self.config["playback"].get("device_id", None)
             if "playback" in self.config
             else None
@@ -369,8 +400,13 @@ class Context:
         # cache authentication data
         if self._auth is None:
             return
-        with open(os.path.join(self._cache_dir, "authentication"), "w") as auth_file:
-            json.dump(self._auth.to_dict(), auth_file)
+        try:
+            with open(
+                os.path.join(self._cache_dir, "authentication"), "w"
+            ) as auth_file:
+                json.dump(self._auth.to_dict(), auth_file)
+        except:
+            pass
 
 
 @click.group()
@@ -389,6 +425,9 @@ class Context:
 @click.version_option()
 @click.pass_context
 def cli(ctx, verbose: int, device_id: str, config: str):
+    # param is unused
+    del device_id, config
+
     if verbose >= 2:
         logging.basicConfig(level=logging.DEBUG)
     elif verbose >= 1:
@@ -432,11 +471,18 @@ def play(
     Every literal may be replaced by "#ask" in which case `interface.dmenu_cmdline` will be used.
     A backslash '\\' can be used to escape a literal '@', '#' or '\\'.
     """
-    ctx: Context = context.find_object(Context)
-    try:
-        ctx.device_id = ctx.device_id or ctx.client.devices[0]["id"]
-    except IndexError:
-        pass
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
+
+    if ctx.device_id is not None:
+        device_id: str | None = ctx.device_id
+    else:
+        try:
+            device_id = str(ctx.client.devices[0]["id"])
+        except IndexError:
+            device_id = None
 
     uris = [uri for uri_list in elements for uri in uri_list]
 
@@ -447,7 +493,7 @@ def play(
 
     if queue:
         for uri in uris[:50]:
-            ctx.client.add_to_queue(uri, device_id=ctx.device_id)
+            ctx.client.add_to_queue(uri, device_id=device_id)
         return
 
     # spotify api can't handle more elements
@@ -457,11 +503,12 @@ def play(
         uris = None
 
     try:
-        ctx.client.play(uris, device_id=ctx.device_id)
+        ctx.client.play(uris, device_id=device_id)
     except spotifython.NotFoundException:
-        ctx.client.transfer_playback(device_id=ctx.device_id)
-        time.sleep(1)
-        ctx.client.play(uris, device_id=ctx.device_id)
+        if device_id is not None:
+            ctx.client.transfer_playback(device_id=device_id)
+            time.sleep(1)
+            ctx.client.play(uris, device_id=device_id)
 
 
 @cli.command("pause")
@@ -470,7 +517,10 @@ def pause(context: click.Context):
     """
     pause playback
     """
-    ctx: Context = context.find_object(Context)
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
     ctx.client.pause(device_id=ctx.device_id)
 
 
@@ -480,17 +530,27 @@ def play_pause(context: click.Context):
     """
     toggle between play/pause
     """
-    ctx: Context = context.find_object(Context)
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
     data = ctx.client.get_playing()
 
     if data is None or not data["is_playing"]:
         try:
             ctx.client.play(device_id=ctx.device_id)
         except spotifython.NotFoundException:
-            ctx.device_id = ctx.device_id or ctx.client.devices[0]["id"]
-            ctx.client.transfer_playback(device_id=ctx.device_id)
-            time.sleep(1)
-            ctx.client.play(device_id=ctx.device_id)
+            if ctx.device_id is not None:
+                device_id: str | None = ctx.device_id
+            else:
+                try:
+                    device_id = str(ctx.client.devices[0]["id"])
+                except IndexError:
+                    device_id = None
+            if device_id is not None:
+                ctx.client.transfer_playback(device_id=device_id)
+                time.sleep(1)
+                ctx.client.play(device_id=device_id)
     else:
         ctx.client.pause(device_id=ctx.device_id)
 
@@ -501,7 +561,10 @@ def next(context: click.Context):
     """
     skip to next song
     """
-    ctx: Context = context.find_object(Context)
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
     ctx.client.next(device_id=ctx.device_id)
 
 
@@ -511,7 +574,10 @@ def prev(context: click.Context):
     """
     skip to previous song
     """
-    ctx: Context = context.find_object(Context)
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
     ctx.client.prev(device_id=ctx.device_id)
 
 
@@ -566,7 +632,10 @@ def metadata(
 
     NOTE: The options `output-json` and `format` are mutually exclusive.
     """
-    ctx: Context = context.find_object(Context)
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
 
     data = ctx.client.get_playing() or {
         "is_playing": False,
@@ -611,4 +680,3 @@ def metadata(
         return
     for key, value in print_data.items():
         print(f"{(key + ': '):<24}{str(value)}")
-    ctx: Context = context.find_object(Context)
