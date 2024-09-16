@@ -580,6 +580,40 @@ def prev(context: click.Context):
         raise Exception("code structure invalid")
     ctx.client.prev(device_id=ctx.device_id)
 
+def device_complete(ctx: click.Context, param, incomplete: str):
+    del param
+
+    context = Context(ctx.find_root().params)
+
+    devices = context.client.devices
+
+    devices.append({"id": "#ask", "name": "query user"})
+
+    options = [device for device in devices if device["id"].startswith(incomplete)]
+    return [shell_completion.CompletionItem(o["id"], help=o["name"]) for o in options]
+
+@cli.command("device")
+@click.argument("device-id", shell_complete=device_complete)
+@click.pass_context
+def device(context: click.Context, device_id: str):
+    """
+    select device to play on
+    """
+    if (tmp := context.find_object(Context)) is not None:
+        ctx: Context = tmp
+    else:
+        raise Exception("code structure invalid")
+
+    if device_id == "#ask":
+        options = [f"{d['id']} - {d['name']}" for d in ctx.client.devices]
+        selected = [s for s in dmenu_query("device: ", options, ctx.config) if s in options]
+        
+        if len(selected) == 0:
+            return
+        device_id = selected[0].split(" - ")[0]
+
+    ctx.client.transfer_playback(device_id, True)
+
 
 @cli.command("metadata")
 @click.option(
