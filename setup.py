@@ -5,7 +5,7 @@ with open("README.rst", "r", encoding="utf-8") as f:
 
 setuptools.setup(
     name="spotifython-cli",
-    version="0.3.2",
+    version="0.3.3",
     author="VAWVAW",
     author_email="vawvaw@vaw-valentin.de",
     description="A command line interface for spotifython intended for use with spotifyd",
