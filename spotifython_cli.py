@@ -163,7 +163,7 @@ class UriType(click.ParamType):
                 if term == "":
                     return tuple()
                 results = context.client.search(
-                    term, "album,playlist,track,episode,show", limit=10
+                    term, "track,album,playlist,episode,show", limit=10
                 )
                 try:
                     options = {
