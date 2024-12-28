@@ -444,6 +444,12 @@ def cli(ctx, verbose: int, device_id: str, config: str):
 @click.option(
     "--queue", is_flag=True, help="add elements to queue instead of playing them"
 )
+@click.option(
+    "--from-ask", is_flag=True, help="query using dmenu from which track to start"
+)
+@click.option(
+    "--to-ask", is_flag=True, help="query using dmenu until which track to play"
+)
 @click.argument("elements", nargs=-1, type=UriType())
 @click.pass_context
 def play(
@@ -451,6 +457,8 @@ def play(
     shuffle: bool,
     reverse: bool,
     queue: bool,
+    from_ask: bool,
+    to_ask: bool,
     elements: tuple[tuple[spotifython.URI]],
 ):
     """
@@ -489,6 +497,22 @@ def play(
     if shuffle:
         random.shuffle(uris)
     elif reverse:
+        uris.reverse()
+
+    if from_ask:
+        options = {ctx.client.get_element(uri).name: uri for uri in uris}
+        first = dmenu_query("first:", list(options.keys()), ctx.config)
+        if len(first) > 0 and first[0] in options:
+            while uris[0] != options[first[0]]:
+                uris.pop(0)
+
+    if to_ask:
+        uris.reverse()
+        options = {ctx.client.get_element(uri).name: uri for uri in uris}
+        last = dmenu_query("last:", list(options.keys()), ctx.config)
+        if len(last) > 0 and last[0] in options:
+            while uris[0] != options[last[0]]:
+                uris.pop(0)
         uris.reverse()
 
     if queue:
