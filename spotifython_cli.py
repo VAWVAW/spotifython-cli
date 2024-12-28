@@ -382,9 +382,7 @@ class Context:
             ),
             "spotifython-cli",
         )
-        self._auth = load_authentication(
-            cache_dir=self._cache_dir, config=self.config
-        )
+        self._auth = load_authentication(cache_dir=self._cache_dir, config=self.config)
         self.client: spotifython.Client = spotifython.Client(
             cache_dir=self._cache_dir,
             authentication=self._auth,
@@ -604,6 +602,7 @@ def prev(context: click.Context):
         raise Exception("code structure invalid")
     ctx.client.prev(device_id=ctx.device_id)
 
+
 def device_complete(ctx: click.Context, param, incomplete: str):
     del param
 
@@ -615,6 +614,7 @@ def device_complete(ctx: click.Context, param, incomplete: str):
 
     options = [device for device in devices if device["id"].startswith(incomplete)]
     return [shell_completion.CompletionItem(o["id"], help=o["name"]) for o in options]
+
 
 @cli.command("device")
 @click.argument("device-id", shell_complete=device_complete)
@@ -630,8 +630,10 @@ def device(context: click.Context, device_id: str):
 
     if device_id == "#ask":
         options = [f"{d['id']} - {d['name']}" for d in ctx.client.devices]
-        selected = [s for s in dmenu_query("device: ", options, ctx.config) if s in options]
-        
+        selected = [
+            s for s in dmenu_query("device: ", options, ctx.config) if s in options
+        ]
+
         if len(selected) == 0:
             return
         device_id = selected[0].split(" - ")[0]
