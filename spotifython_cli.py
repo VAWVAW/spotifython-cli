@@ -169,7 +169,7 @@ class UriType(click.ParamType):
                     options = {
                         f"{type_name:<10}{elem.name}": elem
                         for type_name, elements in results.items()
-                        for elem in elements
+                        for elem in reversed(elements)
                     }
                     elements = dmenu_select("results: ", options, context.config)
                 except FileNotFoundError:
