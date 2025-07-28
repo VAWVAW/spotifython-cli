@@ -75,6 +75,15 @@ def dmenu_select(
     return [options[sel] for sel in selected if sel in options]
 
 
+def long_name(elem: spotifython.Track | spotifython.Episode) -> str:
+    if isinstance(elem, spotifython.Track):
+        artists = ", ".join(map(lambda a: a.name, elem.artists))
+        return f"{elem.name} - {artists}"
+
+    assert isinstance(elem, spotifython.Episode)
+    return f"{elem.name} - {elem.show.name}"
+
+
 class MutuallyExclusiveOption(click.Option):
     def __init__(self, *args, **kwargs):
         self.mutually_exclusive = set(kwargs.pop("mutually_exclusive", []))
@@ -201,7 +210,15 @@ class UriType(click.ParamType):
                 continue
 
             if terms[0] == "#ask":
-                options = {item.name: item for item in elem.items}
+                options = {}
+                for item in elem.items:
+                    if item.name not in options:
+                        options[item.name] = item
+                        continue
+                    other = options.pop(item.name)
+                    options[long_name(other)] = other
+                    options[long_name(item)] = item
+
                 try:
                     ret += dmenu_select("songs: ", options, context.config)
                 except FileNotFoundError:
