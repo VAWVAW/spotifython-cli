@@ -175,11 +175,27 @@ class UriType(click.ParamType):
                     term, "track,album,playlist,episode,show", limit=10
                 )
                 try:
-                    options = {
-                        f"{type_name:<10}{elem.name}": elem
-                        for type_name, elements in results.items()
-                        for elem in reversed(elements)
-                    }
+                    options = {}
+                    for type_name, elements in results.items():
+                        for elem in reversed(elements):
+                            match elem.__class__:
+                                case spotifython.Track:
+                                    assert(isinstance(elem, spotifython.Track))
+                                    artists = ", ".join(map(lambda a: a.name, elem.artists))
+                                    name = f"{elem.name} - {elem.album.name} - {artists}"
+                                case spotifython.Episode:
+                                    assert(isinstance(elem, spotifython.Episode))
+                                    name = f"{elem.name} - {elem.show.name}"
+                                case spotifython.Album:
+                                    assert(isinstance(elem, spotifython.Album))
+                                    artists = ", ".join(map(lambda a: a.name, elem.artists))
+                                    name = f"{elem.name} - {artists}"
+                                case spotifython.Playlist:
+                                    assert(isinstance(elem, spotifython.Playlist))
+                                    name = f"{elem.name} - {elem.owner.name}"
+                                case _:
+                                    name = elem.name
+                            options[f"{type_name:<10}{name}"] = elem
                     elements = dmenu_select("results: ", options, context.config)
                 except FileNotFoundError:
                     logging.warning(
