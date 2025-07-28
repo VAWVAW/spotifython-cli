@@ -2,7 +2,7 @@
 
 python3.pkgs.buildPythonApplication rec {
   pname = "spotifython-cli";
-  version = "0.3.6";
+  version = "0.3.7";
 
   src = ./.;
 
